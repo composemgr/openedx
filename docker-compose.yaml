@@ -1,0 +1,54 @@
+# nginx proxy address - http://172.17.0.1:8093
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "5m"
+    max-file: "1"
+
+services:
+  openedx:
+    image: openedx/edx-platform:latest
+    container_name: openedx-app
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - openedx
+    ports:
+      - "8093:8000"
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ./rootfs/data/openedx:/data
+      - ./rootfs/config/openedx:/config
+    depends_on:
+      - openedx-db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  openedx-db:
+    image: mongo:7
+    container_name: openedx-db
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - openedx
+    environment:
+      TZ: ${TZ:-America/New_York}
+      MONGO_INITDB_DATABASE: ${DB_CREATE_DATABASE_NAME:-openedx}
+      MONGO_INITDB_ROOT_USERNAME: ${DB_ADMIN_NAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_ADMIN_PASS:-changeme_root_password}
+    volumes:
+      - ./rootfs/db/mongodb/openedx:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  openedx:
+    external: false
