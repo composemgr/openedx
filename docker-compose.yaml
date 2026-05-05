@@ -19,8 +19,8 @@ services:
     environment:
       TZ: ${TZ:-America/New_York}
     volumes:
-      - ./rootfs/data/openedx:/data
-      - ./rootfs/config/openedx:/config
+      - ./volumes/data/openedx:/data
+      - ./volumes/config/openedx:/config
     depends_on:
       - openedx-db
     healthcheck:
@@ -42,7 +42,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${DB_ADMIN_NAME:-root}
       MONGO_INITDB_ROOT_PASSWORD: ${DB_ADMIN_PASS:-changeme_root_password}
     volumes:
-      - ./rootfs/data/db/mongodb/openedx:/data/db
+      - ./volumes/data/db/mongodb/openedx:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 30s
