@@ -50,9 +50,9 @@ See `docker-compose.yaml` for complete list of configurable options.
 
 ## 📂 Volumes
 
-- `./rootfs/data/openedx` - Data storage
-- `./rootfs/config/openedx` - Data storage
-- `./rootfs/data/db/mongodb/openedx` - Data storage
+- `./volumes/data/openedx` - Data storage
+- `./volumes/config/openedx` - Data storage
+- `./volumes/data/db/mongodb/openedx` - Data storage
 
 ## 🔐 Security
 
