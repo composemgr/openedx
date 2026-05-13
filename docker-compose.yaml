@@ -1,5 +1,6 @@
 # nginx proxy address - http://172.17.0.1:8093
 
+name: openedx
 x-logging: &default-logging
   driver: json-file
   options:
@@ -9,15 +10,24 @@ x-logging: &default-logging
 services:
   openedx:
     image: openedx/edx-platform:latest
+    pull_policy: always
     container_name: openedx-app
-    restart: unless-stopped
+    restart: always
     logging: *default-logging
     networks:
       - openedx
     ports:
-      - "8093:8000"
+      - "172.17.0.1:8093:8000"
     environment:
       TZ: ${TZ:-America/New_York}
+      LMS_CFG: /config/lms.yml
+      MONGODB_HOST: openedx-db
+      MONGODB_PORT: 27017
+      MONGODB_DATABASE: ${DB_CREATE_DATABASE_NAME:-openedx}
+      MONGODB_USER: ${DB_USER_NAME:-openedx}
+      MONGODB_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
+      DJANGO_SETTINGS_MODULE: lms.envs.production
+      DJANGO_SECRET_KEY: ${APP_SECRET_KEY:-changeme_secret_key_min_32_chars}
     volumes:
       - ./volumes/data/openedx:/data
       - ./volumes/config/openedx:/config
@@ -30,17 +40,18 @@ services:
       retries: 3
 
   openedx-db:
-    image: mongo:7
+    image: mongo:latest
+    pull_policy: always
     container_name: openedx-db
-    restart: unless-stopped
+    restart: always
     logging: *default-logging
     networks:
       - openedx
     environment:
       TZ: ${TZ:-America/New_York}
       MONGO_INITDB_DATABASE: ${DB_CREATE_DATABASE_NAME:-openedx}
-      MONGO_INITDB_ROOT_USERNAME: ${DB_ADMIN_NAME:-root}
-      MONGO_INITDB_ROOT_PASSWORD: ${DB_ADMIN_PASS:-changeme_root_password}
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USER_NAME:-openedx}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
     volumes:
       - ./volumes/data/db/mongodb/openedx:/data/db
     healthcheck:
