@@ -16,6 +16,8 @@ services:
     logging: *default-logging
     networks:
       - openedx
+      - proxy
+      - cloudflare
     ports:
       - "172.17.0.1:8093:8000"
     environment:
@@ -28,6 +30,8 @@ services:
       MONGODB_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
       DJANGO_SETTINGS_MODULE: lms.envs.production
       DJANGO_SECRET_KEY: ${APP_SECRET_KEY:-changeme_secret_key_min_32_chars}
+      CONTAINER_NAME: openedx-app
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
     volumes:
       - ./volumes/data/openedx:/data
       - ./volumes/config/openedx:/config
@@ -38,6 +42,22 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    labels:
+      - 'traefik.enable=true'
+      - 'cloudflare.enable=true'
+      - 'traefik.docker.network=proxy'
+      - 'cloudflare.service=http://openedx-app:8000'
+      - 'cloudflare.hostname=openedx.${CLOUDFLARE_ZONE_NAME:-}'
+      - 'traefik.http.routers.openedx-app.entrypoints=http'
+      - 'traefik.http.routers.openedx-app-secure.tls=true'
+      - 'traefik.http.routers.openedx-app.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.middlewares.openedx-app-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.openedx-app.middlewares=openedx-app-https-redirect'
+      - 'traefik.http.routers.openedx-app-secure.entrypoints=https'
+      - 'traefik.http.routers.openedx-app-secure.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.routers.openedx-app-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.openedx-app-secure.service=openedx-app'
+      - 'traefik.http.services.openedx-app.loadbalancer.server.port=8000'
 
   openedx-db:
     image: mongo:latest
@@ -52,6 +72,7 @@ services:
       MONGO_INITDB_DATABASE: ${DB_CREATE_DATABASE_NAME:-openedx}
       MONGO_INITDB_ROOT_USERNAME: ${DB_USER_NAME:-openedx}
       MONGO_INITDB_ROOT_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
+      CONTAINER_NAME: openedx-db
     volumes:
       - ./volumes/data/db/mongodb/openedx:/data/db
     healthcheck:
@@ -63,3 +84,7 @@ services:
 networks:
   openedx:
     external: false
+  proxy:
+    external: true
+  cloudflare:
+    external: true
