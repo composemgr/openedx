@@ -1,90 +1,89 @@
-# nginx proxy address - http://172.17.0.1:8093
+# nginx proxy address - http://172.17.0.1:64283
 
 name: openedx
 x-logging: &default-logging
-  driver: json-file
   options:
-    max-size: "5m"
-    max-file: "1"
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
 
 services:
-  openedx:
+  server:
     image: openedx/edx-platform:latest
-    pull_policy: always
-    container_name: openedx-app
+    container_name: openedx-server
+    domainname: ${BASE_DOMAIN_NAME:-example.com}
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
+    pull_policy: always
     logging: *default-logging
-    networks:
-      - openedx
-      - proxy
-      - cloudflare
-    ports:
-      - "172.17.0.1:8093:8000"
     environment:
       TZ: ${TZ:-America/New_York}
-      LMS_CFG: /config/lms.yml
-      MONGODB_HOST: openedx-db
-      MONGODB_PORT: 27017
-      MONGODB_DATABASE: ${DB_CREATE_DATABASE_NAME:-openedx}
-      MONGODB_USER: ${DB_USER_NAME:-openedx}
-      MONGODB_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
-      DJANGO_SETTINGS_MODULE: lms.envs.production
-      DJANGO_SECRET_KEY: ${APP_SECRET_KEY:-changeme_secret_key_min_32_chars}
-      CONTAINER_NAME: openedx-app
+      CONTAINER_NAME: openedx-server
       HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
+      DJANGO_SETTINGS_MODULE: lms.envs.production
+      SERVICE_VARIANT: lms
+      LMS_ROOT_URL: https://${BASE_HOST_NAME:-$HOSTNAME}
+      CMS_ROOT_URL: https://${BASE_HOST_NAME:-$HOSTNAME}
+      # Runtime
+      NO_PYTHON_UNINSTALL: "1"
+      UWSGI_WORKERS: ${UWSGI_WORKERS:-2}
+      UWSGI_THREADS: ${UWSGI_THREADS:-4}
+      # Mongo
+      MONGO_USERNAME: ${DB_USER_NAME:-openedx}
+      MONGO_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
+      MONGO_DB_NAME: ${DB_CREATE_DATABASE_NAME:-openedx}
+      # Mysql
+      MYSQL_USERNAME: ${DB_USER_NAME:-openedx}
+      MYSQL_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
+      MYSQL_DATABASE: ${DB_CREATE_DATABASE_NAME:-openedx}
+      # Email
+      SMTP_HOST: ${EMAIL_SERVER_HOST:-172.17.0.1}
+      SMTP_PORT: ${EMAIL_SERVER_PORT:-587}
+      SMTP_USERNAME: ${EMAIL_SERVER_LOGIN_NAME:-}
+      SMTP_PASSWORD: ${EMAIL_SERVER_LOGIN_PASS:-}
+      SMTP_USE_TLS: "true"
+      # Site branding
+      SITE_NAME: ${APP_ORG_NAME:-Open edX}
+      PLATFORM_NAME: ${APP_ORG_NAME:-Open edX}
+      LANGUAGES: ${LANGUAGES:-en}
+      DEFAULT_LANGUAGE: ${DEFAULT_LANGUAGE:-en}
+      ID_MIGRATION_APPS: ${ID_MIGRATION_APPS:-}
+      ENABLE_TUTORING: "true"
+    ports:
+      - '172.17.0.1:64283:8000'
     volumes:
-      - ./volumes/data/openedx:/data
-      - ./volumes/config/openedx:/config
+      - './volumes/config/openedx/www:/openedx/www'
+      - './volumes/data/openedx:/openedx/data'
     depends_on:
-      - openedx-db
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    labels:
-      - 'traefik.enable=true'
-      - 'cloudflare.enable=true'
-      - 'traefik.docker.network=proxy'
-      - 'cloudflare.service=http://openedx-app:8000'
-      - 'cloudflare.hostname=openedx.${CLOUDFLARE_ZONE_NAME:-}'
-      - 'traefik.http.routers.openedx-app.entrypoints=http'
-      - 'traefik.http.routers.openedx-app-secure.tls=true'
-      - 'traefik.http.routers.openedx-app.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
-      - 'traefik.http.middlewares.openedx-app-https-redirect.redirectscheme.scheme=https'
-      - 'traefik.http.routers.openedx-app.middlewares=openedx-app-https-redirect'
-      - 'traefik.http.routers.openedx-app-secure.entrypoints=https'
-      - 'traefik.http.routers.openedx-app-secure.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
-      - 'traefik.http.routers.openedx-app-secure.tls.certresolver=cloudflare'
-      - 'traefik.http.routers.openedx-app-secure.service=openedx-app'
-      - 'traefik.http.services.openedx-app.loadbalancer.server.port=8000'
-
-  openedx-db:
-    image: mongo:latest
-    pull_policy: always
-    container_name: openedx-db
-    restart: always
-    logging: *default-logging
+      db:
+        condition: service_healthy
     networks:
       - openedx
+
+  db:
+    image: mongo:latest
+    container_name: openedx-db
+    hostname: openedx-db
+    restart: always
+    pull_policy: always
+    logging: *default-logging
     environment:
       TZ: ${TZ:-America/New_York}
-      MONGO_INITDB_DATABASE: ${DB_CREATE_DATABASE_NAME:-openedx}
-      MONGO_INITDB_ROOT_USERNAME: ${DB_USER_NAME:-openedx}
-      MONGO_INITDB_ROOT_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
       CONTAINER_NAME: openedx-db
+      MONGO_INITDB_ROOT_USERNAME: ${DB_ADMIN_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_ADMIN_PASS:-changeme_admin_password}
+      MONGO_INITDB_DATABASE: ${DB_CREATE_DATABASE_NAME:-openedx}
     volumes:
-      - ./volumes/data/db/mongodb/openedx:/data/db
+      - './volumes/db/mongo/openedx:/data/db:z'
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+    networks:
+      - openedx
 
 networks:
   openedx:
+    name: openedx
     external: false
-  proxy:
-    external: true
-  cloudflare:
-    external: true
